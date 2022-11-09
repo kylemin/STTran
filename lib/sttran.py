@@ -297,7 +297,7 @@ class STTran(nn.Module):
         self.obj_fc = nn.Linear(2048, 512)
         self.vr_fc = nn.Linear(256*7*7, 512)
 
-        embed_vecs = obj_edge_vectors(obj_classes, wv_type='glove.6B', wv_dir='/home/cong/Dokumente/neural-motifs-master/data', wv_dim=200)
+        embed_vecs = obj_edge_vectors(obj_classes, wv_type='glove.6B', wv_dir='data', wv_dim=200)
         self.obj_embed = nn.Embedding(len(obj_classes), 200)
         self.obj_embed.weight.data = embed_vecs.clone()
 
@@ -332,6 +332,7 @@ class STTran(nn.Module):
         x_semantic = torch.cat((subj_emb, obj_emb), 1)
 
         rel_features = torch.cat((x_visual, x_semantic), dim=1)
+        entry["rel_features"] = rel_features
         # Spatial-Temporal Transformer
         global_output, global_attention_weights, local_attention_weights = self.glocal_transformer(features=rel_features, im_idx=entry['im_idx'])
 

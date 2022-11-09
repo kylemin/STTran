@@ -1,0 +1,11 @@
+*.pyc
+*.o
+*.pkl
+*.pth
+**/__pycache__
+data
+dataloader
+fasterRCNN/lib
+lib/draw_rectangles
+lib/fpn
+weights

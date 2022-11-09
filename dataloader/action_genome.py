@@ -3,7 +3,9 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms import Resize, Compose, ToTensor, Normalize
 import random
-from scipy.misc import imread
+# from scipy.misc import imread
+from cv2 import imread
+import cv2
 import numpy as np
 import pickle
 import os
@@ -50,7 +52,8 @@ class AG(Dataset):
         self.relationship_classes[19] = 'sitting_on'
         self.relationship_classes[20] = 'standing_on'
         self.relationship_classes[25] = 'writing_on'
-
+        
+        
         self.attention_relationships = self.relationship_classes[0:3]
         self.spatial_relationships = self.relationship_classes[3:9]
         self.contacting_relationships = self.relationship_classes[9:]
@@ -85,8 +88,13 @@ class AG(Dataset):
 
         # collect valid frames
         video_dict = {}
+        q=[]
+        
         for i in person_bbox.keys():
+            
             if object_bbox[i][0]['metadata']['set'] == mode: #train or testing?
+                video_name, frame_num = i.split('/')
+                q.append(video_name)
                 frame_valid = False
                 for j in object_bbox[i]: # the frame is valid if there is visible bbox
                     if j['visible']:
@@ -97,7 +105,10 @@ class AG(Dataset):
                         video_dict[video_name].append(i)
                     else:
                         video_dict[video_name] = [i]
-
+                        
+        all_video_names = np.unique(q)
+        self.valid_video_names = []
+        
         self.video_list = []
         self.video_size = [] # (w,h)
         self.gt_annotations = []
@@ -106,7 +117,7 @@ class AG(Dataset):
         self.non_person_video = 0
         self.one_frame_video = 0
         self.valid_nums = 0
-
+        self.invalid_videos = []
         '''
         filter_nonperson_box_frame = True (default): according to the stanford method, remove the frames without person box both for training and testing
         filter_nonperson_box_frame = False: still use the frames without person box, FasterRCNN may find the person
@@ -115,6 +126,7 @@ class AG(Dataset):
             video = []
             gt_annotation_video = []
             for j in video_dict[i]:
+                
                 if filter_nonperson_box_frame:
                     if person_bbox[j]['bbox'].shape[0] == 0:
                         self.non_gt_human_nums += 1
@@ -124,7 +136,7 @@ class AG(Dataset):
                         self.valid_nums += 1
 
 
-                gt_annotation_frame = [{'person_bbox': person_bbox[j]['bbox']}]
+                gt_annotation_frame = [{'person_bbox': person_bbox[j]['bbox'], "frame": j}]
                 # each frames's objects and human
                 for k in object_bbox[j]:
                     if k['visible']:
@@ -141,12 +153,14 @@ class AG(Dataset):
                 self.video_list.append(video)
                 self.video_size.append(person_bbox[j]['bbox_size'])
                 self.gt_annotations.append(gt_annotation_video)
+                self.valid_video_names.append(i)
             elif len(video) == 1:
                 self.one_frame_video += 1
             else:
                 self.non_person_video += 1
-
         print('x'*60)
+        
+        self.invalid_video_names = np.setdiff1d(all_video_names, self.valid_video_names, assume_unique=False)
         if filter_nonperson_box_frame:
             print('There are {} videos and {} valid frames'.format(len(self.video_list), self.valid_nums))
             print('{} videos are invalid (no person), remove them'.format(self.non_person_video))
@@ -157,7 +171,9 @@ class AG(Dataset):
             print('{} frames have no human bbox in GT'.format(self.non_gt_human_nums))
             print('Removed {} of them without joint heatmaps which means FasterRCNN also cannot find the human'.format(non_heatmap_nums))
         print('x' * 60)
-
+        # self.video_list = self.video_list[:10]
+        # self.video_size = self.video_size[:10]
+        # self.gt_annotations = self.gt_annotations[:10]
     def __getitem__(self, index):
 
         frame_names = self.video_list[index]
@@ -165,8 +181,10 @@ class AG(Dataset):
         im_scales = []
 
         for idx, name in enumerate(frame_names):
-            im = imread(os.path.join(self.frames_path, name)) # channel h,w,3
-            im = im[:, :, ::-1] # rgb -> bgr
+            im = imread(os.path.join(self.frames_path, name),cv2.IMREAD_UNCHANGED) # channel h,w,3
+           
+            
+#             im = im[:, :, ::-1] # rgb -> bgr
             im, im_scale = prep_im_for_blob(im, [[[102.9801, 115.9465, 122.7717]]], 600, 1000) #cfg.PIXEL_MEANS, target_size, cfg.TRAIN.MAX_SIZE
             im_scales.append(im_scale)
             processed_ims.append(im)

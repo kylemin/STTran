@@ -7,7 +7,8 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 import os
-import dill as pkl
+import pickle as pkl
+#import dill as pkl
 from itertools import tee
 from torch import nn
 

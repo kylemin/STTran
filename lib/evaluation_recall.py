@@ -4,6 +4,8 @@ import numpy as np
 from functools import reduce
 from lib.ults.pytorch_misc import intersect_2d, argsort_desc
 from lib.fpn.box_intersections_cpu.bbox import bbox_overlaps
+import os
+import pickle
 
 class BasicSceneGraphEvaluator:
     def __init__(self, mode, AG_object_classes, AG_all_predicates, AG_attention_predicates, AG_spatial_predicates, AG_contacting_predicates,
@@ -33,6 +35,7 @@ class BasicSceneGraphEvaluator:
 
         pred['attention_distribution'] = nn.functional.softmax(pred['attention_distribution'], dim=1)
 
+        dict_for_vis = {}
         for idx, frame_gt in enumerate(gt):
             # generate the ground truth
             gt_boxes = np.zeros([len(frame_gt), 4]) #now there is no person box! we assume that person box index == 0
@@ -93,8 +96,15 @@ class BasicSceneGraphEvaluator:
                     'rel_scores': np.concatenate((pred_scores_1, pred_scores_2, pred_scores_3), axis=0)
                 }
 
-            evaluate_from_dict(gt_entry, pred_entry, self.mode, self.result_dict,
+            pred_to_gt, pred_5ples, rel_scores = evaluate_from_dict(gt_entry, pred_entry, self.mode, self.result_dict,
                                iou_thresh=self.iou_threshold, method=self.constraint, threshold=self.semithreshold)
+
+            dict_for_vis[frame_gt[0]['frame'].split('/')[1]] = {'gt_entry': gt_entry, 'pred_5ples': pred_5ples}
+
+        path_dict_vis = '/datasets/ego4d/tmp/sayak/vis/{}/{}'.format(self.mode, self.constraint)
+        os.makedirs(path_dict_vis, exist_ok=True)
+        with open(os.path.join(path_dict_vis, '{}.pkl').format(frame_gt[0]['frame'].split('/')[0]), 'wb') as f:
+            pickle.dump(dict_for_vis, f)
 
 def evaluate_from_dict(gt_entry, pred_entry, mode, result_dict, method=None, threshold = 0.9, **kwargs):
     """
@@ -205,6 +215,7 @@ def evaluate_recall(gt_rels, gt_boxes, gt_classes,
                  rel_scores, cls_scores)
 
     sorted_scores = relation_scores.prod(1)
+    pred_rels = pred_rels[sorted_scores.argsort()[::-1],:]
     pred_triplets = pred_triplets[sorted_scores.argsort()[::-1],:]
     pred_triplet_boxes = pred_triplet_boxes[sorted_scores.argsort()[::-1],:]
     relation_scores = relation_scores[sorted_scores.argsort()[::-1],:]

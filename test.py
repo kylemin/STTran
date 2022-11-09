@@ -1,3 +1,4 @@
+import os
 import numpy as np
 np.set_printoptions(precision=4)
 import copy
@@ -9,12 +10,14 @@ from lib.config import Config
 from lib.evaluation_recall import BasicSceneGraphEvaluator
 from lib.object_detector import detector
 from lib.sttran import STTran
+import pickle
 
 conf = Config()
 for i in conf.args:
     print(i,':', conf.args[i])
 
 AG_dataset = AG(mode="test", datasize=conf.datasize, data_path=conf.data_path, filter_nonperson_box_frame=True,
+#AG_dataset = AG(mode="train", datasize=conf.datasize, data_path=conf.data_path, filter_nonperson_box_frame=True,
                 filter_small_box=False if conf.mode == 'predcls' else True)
 dataloader = torch.utils.data.DataLoader(AG_dataset, shuffle=False, num_workers=0, collate_fn=cuda_collate_fn)
 
@@ -71,23 +74,29 @@ evaluator3 = BasicSceneGraphEvaluator(
 with torch.no_grad():
     for b, data in enumerate(dataloader):
 
-        im_data = copy.deepcopy(data[0].cuda(0))
-        im_info = copy.deepcopy(data[1].cuda(0))
-        gt_boxes = copy.deepcopy(data[2].cuda(0))
+        im_data = copy.deepcopy(data[0].cuda(0)) # (38, 3, 1067, 600)
+        im_info = copy.deepcopy(data[1].cuda(0)) # (38, 3)
+        gt_boxes = copy.deepcopy(data[2].cuda(0)) # 
         num_boxes = copy.deepcopy(data[3].cuda(0))
         gt_annotation = AG_dataset.gt_annotations[data[4]]
+        video_id = AG_dataset.valid_video_names[data[4]]
 
         entry = object_detector(im_data, im_info, gt_boxes, num_boxes, gt_annotation, im_all=None)
 
         pred = model(entry)
         evaluator1.evaluate_scene_graph(gt_annotation, dict(pred))
-        evaluator2.evaluate_scene_graph(gt_annotation, dict(pred))
+        #evaluator2.evaluate_scene_graph(gt_annotation, dict(pred))
         evaluator3.evaluate_scene_graph(gt_annotation, dict(pred))
+        rel_features = pred['rel_features'].cpu().numpy()
+
+        print (b, flush=True)
+        #with open(os.path.join('/datasets/ego4d/tmp/sayak/predcls/STTran', '{}.pkl'.format(video_id)), 'wb') as f: #<file_path = root+/video_id/>
+        #    pickle.dump(rel_features, f)
 
 
 print('-------------------------with constraint-------------------------------')
 evaluator1.print_stats()
-print('-------------------------semi constraint-------------------------------')
-evaluator2.print_stats()
+#print('-------------------------semi constraint-------------------------------')
+#evaluator2.print_stats()
 print('-------------------------no constraint-------------------------------')
 evaluator3.print_stats()
